@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LaserWeed Control System</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <div class="logo-icon">🎯</div>
+                    <h1>LaserWeed</h1>
+                </div>
+                <div class="system-status">
+                    <div class="status-indicator" id="connectionStatus">
+                        <div class="status-dot"></div>
+                        <span>Connected</span>
+                    </div>
+                    <div class="status-indicator" id="laserStatus">
+                        <div class="status-dot laser-off"></div>
+                        <span>Laser OFF</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Dashboard -->
+        <main class="dashboard">
+            <!-- Video Feed Section -->
+            <section class="video-section">
+                <div class="video-container">
+                    <div class="video-header">
+                        <h2>Live Feed</h2>
+                        <div class="video-controls">
+                            <button class="btn-icon" id="fullscreenBtn" title="Fullscreen">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M16 21h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="video-wrapper">
+                        <div class="video-placeholder" id="videoFeed">
+                            <div class="loading-spinner"></div>
+                            <p>Connecting to video stream...</p>
+                        </div>
+                        <!-- This will be replaced with actual video stream -->
+                        <img id="videoStream" src="" alt="Live video feed" style="display: none;">
+                    </div>
+                    <div class="detection-info">
+                        <div class="detection-counter">
+                            <span class="counter-label">Weeds Detected:</span>
+                            <span class="counter-value" id="weedCount">0</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Control Panel -->
+            <section class="control-panel">
+                <div class="control-header">
+                    <h2>Laser Control</h2>
+                    <div class="power-display">
+                        <span class="power-value" id="powerValue">0</span>
+                        <span class="power-unit">%</span>
+                    </div>
+                </div>
+
+                <!-- Power Slider -->
+                <div class="power-control">
+                    <label for="powerSlider">Power Level</label>
+                    <div class="slider-container">
+                        <input type="range" id="powerSlider" min="0" max="100" value="0" class="power-slider">
+                        <div class="slider-track">
+                            <div class="slider-fill" id="sliderFill"></div>
+                        </div>
+                    </div>
+                    <div class="power-labels">
+                        <span>0%</span>
+                        <span>25%</span>
+                        <span>50%</span>
+                        <span>75%</span>
+                        <span>100%</span>
+                    </div>
+                </div>
+
+                <!-- Quick Controls -->
+                <div class="quick-controls">
+                    <button class="btn-control btn-on" id="laserOnBtn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="5"></circle>
+                            <line x1="12" y1="1" x2="12" y2="3"></line>
+                            <line x1="12" y1="21" x2="12" y2="23"></line>
+                            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                            <line x1="1" y1="12" x2="3" y2="12"></line>
+                            <line x1="21" y1="12" x2="23" y2="12"></line>
+                            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                        </svg>
+                        ON (100%)
+                    </button>
+                    <button class="btn-control btn-off" id="laserOffBtn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+                        </svg>
+                        OFF
+                    </button>
+                </div>
+
+                <!-- Safety Notice -->
+                <div class="safety-notice">
+                    <div class="safety-icon">⚠️</div>
+                    <p>Always wear appropriate laser safety equipment when operating this device.</p>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer Status Bar -->
+        <footer class="footer">
+            <div class="footer-content">
+                <div class="system-info">
+                    <span>ESP8266 IP: 192.168.4.1</span>
+                    <span>|</span>
+                    <span>Network: LaserControlESP</span>
+                    <span>|</span>
+                    <span id="timestamp">--:--:--</span>
+                </div>
+                <div class="version-info">
+                    <span>LaserWeed v1.0</span>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
