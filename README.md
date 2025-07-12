@@ -2,16 +2,17 @@
 
 A complete IoT system for precision weed detection and laser targeting using computer vision and web-based control interface.
 
-![LaserWeed System](https://img.shields.io/badge/Status-Active-green) ![YOLOv7](https://img.shields.io/badge/AI-YOLOv7-blue) ![ESP8266](https://img.shields.io/badge/Hardware-ESP8266-orange) ![TensorFlow.js](https://img.shields.io/badge/ML-TensorFlow.js-yellow)
+![LaserWeed System](https://img.shields.io/badge/Status-Active-green) ![YOLOv7](https://img.shields.io/badge/AI-YOLOv7-blue) ![ONNX](https://img.shields.io/badge/AI-ONNX-purple) ![ESP8266](https://img.shields.io/badge/Hardware-ESP8266-orange) ![TensorFlow.js](https://img.shields.io/badge/ML-TensorFlow.js-yellow)
 
 ## 🌟 Features
 
-- **Real-time Weed Detection** with YOLOv7 AI models
-- **Dual Camera Support** (Raspberry Pi + Laptop webcam)
-- **Precision Laser Control** via ESP8266
-- **Web-based Interface** with glassmorphism design
-- **Automatic Model Conversion** from .ckpt to TensorFlow.js
-- **Agricultural Optimization** with crop/weed specific tuning
+- **🤖 Advanced AI Detection** with YOLOv7 ONNX models (30 FPS)
+- **📱 Real-time Web Interface** with glassmorphism design
+- **📷 Dual Camera Support** (Raspberry Pi + Laptop webcam)
+- **🎯 Precision Laser Control** via ESP8266
+- **🚀 High Performance** ONNX.js optimized inference
+- **🔄 Automatic Model Loading** with fallback detection
+- **🌱 Agricultural Optimization** with crop/weed specific tuning
 
 ## 🏗️ System Architecture
 

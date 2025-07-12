@@ -21,6 +21,7 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import List, Tuple, Optional
 
@@ -264,11 +265,22 @@ class ModelConverter:
         
         # Create a proper PyTorch checkpoint
         if used_key == 'state_dict':
-            # Direct state dict - create a minimal model wrapper
+            # Lightning state dict - filter model weights only
+            filtered_state_dict = {}
+            for key, value in model_data.items():
+                if key.startswith('model.'):
+                    # Remove 'model.' prefix for clean state dict
+                    clean_key = key[6:]  # Remove 'model.' prefix
+                    filtered_state_dict[clean_key] = value
+            
+            if not filtered_state_dict:
+                # If no 'model.' prefix found, use state_dict as-is
+                filtered_state_dict = model_data
+            
             model_checkpoint = {
-                'model': model_data,
+                'model': filtered_state_dict,
                 'epoch': checkpoint.get('epoch', 0),
-                'names': checkpoint.get('names', model_info.get('classes', ['crop', 'weed']))
+                'names': checkpoint.get('hyper_parameters', {}).get('names', model_info.get('classes', ['crop', 'weed']))
             }
         else:
             # Model object or EMA - extract state dict if needed
@@ -316,61 +328,333 @@ class ModelConverter:
         """Strategy 2: Direct ONNX export without intermediate .pt file."""
         try:
             import torch.onnx
+            print("🔄 Attempting direct ONNX export...")
             
-            # This strategy would require rebuilding the model architecture
-            # For now, we'll skip this and let it fail gracefully
-            raise NotImplementedError("Direct ONNX export not implemented yet")
+            # Try to find model data in different locations
+            model_data = None
+            model_key = None
+            
+            # Check for Lightning checkpoint format
+            if 'state_dict' in checkpoint:
+                print("📋 Found Lightning checkpoint format")
+                model_data = checkpoint['state_dict']
+                model_key = 'state_dict'
+            elif 'model' in checkpoint:
+                model_data = checkpoint['model']
+                model_key = 'model'
+            elif 'ema' in checkpoint:
+                model_data = checkpoint['ema']
+                model_key = 'ema'
+            else:
+                # Look for any tensor-like data that could be model weights
+                for key, value in checkpoint.items():
+                    if isinstance(value, dict) and any('weight' in k.lower() or 'bias' in k.lower() for k in str(value.keys())):
+                        print(f"🎯 Found potential model weights in '{key}'")
+                        model_data = value
+                        model_key = key
+                        break
+            
+            if model_data is None:
+                raise ValueError("No model weights found in checkpoint")
+            
+            print(f"✅ Using model data from '{model_key}' key")
+            
+            # Create a dummy model for export (simplified approach)
+            # This would need to be enhanced with actual YOLOv7 architecture
+            dummy_input = torch.randn(1, 3, model_info['input_size'][0], model_info['input_size'][1])
+            
+            # For now, create a placeholder ONNX file
+            onnx_path = self.output_path / "temp_model.onnx"
+            print(f"⚠️  Direct ONNX export requires model architecture reconstruction")
+            print(f"📝 Found {len(model_data)} parameter keys in checkpoint")
+            
+            # This is a placeholder - real implementation would need YOLOv7 architecture
+            raise NotImplementedError(f"Architecture reconstruction needed for {model_key} format")
             
         except Exception as e:
+            print(f"❌ Direct ONNX export failed: {e}")
             raise e
     
     def _strategy_manual_reconstruction(self, checkpoint: dict, model_info: dict) -> bool:
         """Strategy 3: Manual model reconstruction from weights."""
         try:
-            # This would involve manually recreating the YOLOv7 architecture
-            # and loading the weights - quite complex for this context
-            raise NotImplementedError("Manual reconstruction not implemented yet")
+            print("🔄 Attempting manual model reconstruction...")
+            
+            # Analyze checkpoint structure in detail
+            print("🔍 Analyzing checkpoint structure...")
+            
+            # Check if this is a Lightning checkpoint
+            if 'state_dict' in checkpoint:
+                print("⚡ Detected PyTorch Lightning checkpoint")
+                state_dict = checkpoint['state_dict']
+                
+                # Try to extract model from Lightning format
+                filtered_state_dict = {}
+                model_prefix = None
+                
+                # Look for common model prefixes in Lightning
+                for key in state_dict.keys():
+                    if key.startswith('model.'):
+                        model_prefix = 'model.'
+                        break
+                    elif key.startswith('net.'):
+                        model_prefix = 'net.'
+                        break
+                    elif key.startswith('backbone.'):
+                        model_prefix = 'backbone.'
+                        break
+                
+                if model_prefix:
+                    print(f"🎯 Found model weights with prefix '{model_prefix}'")
+                    # Remove prefix to get clean state dict
+                    for key, value in state_dict.items():
+                        if key.startswith(model_prefix):
+                            clean_key = key[len(model_prefix):]
+                            filtered_state_dict[clean_key] = value
+                else:
+                    # Use state dict as-is
+                    filtered_state_dict = state_dict
+                
+                # Create a new checkpoint with cleaned weights
+                clean_checkpoint = {
+                    'model': filtered_state_dict,
+                    'epoch': checkpoint.get('epoch', 0),
+                    'names': checkpoint.get('hyp', {}).get('names', model_info.get('classes', ['crop', 'weed']))
+                }
+                
+                # Save as temporary .pt file and try ultralytics again
+                temp_pt_path = self.output_path / "temp_reconstructed.pt"
+                torch.save(clean_checkpoint, temp_pt_path)
+                
+                try:
+                    # Try loading with ultralytics
+                    from ultralytics import YOLO
+                    model = YOLO(str(temp_pt_path))
+                    
+                    # Export to ONNX
+                    self.temp_onnx_path = self.output_path / "temp_model.onnx"
+                    model.export(format='onnx', imgsz=model_info['input_size'][0])
+                    
+                    # Move exported ONNX to our temp location
+                    exported_onnx = temp_pt_path.with_suffix('.onnx')
+                    if exported_onnx.exists():
+                        exported_onnx.rename(self.temp_onnx_path)
+                        
+                        # Convert ONNX to TensorFlow.js
+                        success = self._convert_onnx(str(self.temp_onnx_path))
+                        if success:
+                            self._generate_yolov7_classes_json(model_info)
+                            print("✅ Manual reconstruction successful")
+                            return True
+                    
+                    return False
+                    
+                finally:
+                    # Clean up
+                    if temp_pt_path.exists():
+                        temp_pt_path.unlink()
+            
+            else:
+                print("❌ Unknown checkpoint format for reconstruction")
+                raise NotImplementedError("Non-Lightning checkpoint reconstruction not implemented")
             
         except Exception as e:
+            print(f"❌ Manual reconstruction failed: {e}")
             raise e
     
     def _strategy_fallback_conversion(self, checkpoint: dict, model_info: dict) -> bool:
-        """Strategy 4: Fallback - create classes.json only."""
-        print("🔄 Creating fallback configuration without model conversion...")
+        """Strategy 4: Fallback - create classes.json only with detailed analysis."""
+        print("🔄 Creating fallback configuration with detailed checkpoint analysis...")
+        
+        # Run detailed checkpoint analysis
+        print("\n🔍 Running detailed checkpoint inspection...")
+        try:
+            # Import and run the inspection script
+            import subprocess
+            import sys
+            
+            inspect_script = self.input_path.parent.parent / "models" / "inspect_checkpoint.py"
+            if inspect_script.exists():
+                print(f"📋 Running checkpoint inspector: {inspect_script}")
+                result = subprocess.run([
+                    sys.executable, str(inspect_script), str(self.input_path)
+                ], capture_output=True, text=True, timeout=30)
+                
+                if result.returncode == 0:
+                    print("✅ Checkpoint inspection completed")
+                    print("📊 Inspection output:")
+                    print(result.stdout)
+                else:
+                    print(f"⚠️  Checkpoint inspection had issues: {result.stderr}")
+            
+        except Exception as e:
+            print(f"⚠️  Could not run checkpoint inspector: {e}")
         
         # Generate a comprehensive classes.json even without successful conversion
         enhanced_model_info = model_info.copy()
         
         # Extract additional information from checkpoint if available
-        if 'epoch' in checkpoint:
-            enhanced_model_info['training_epoch'] = checkpoint['epoch']
+        checkpoint_metadata = {}
         
-        if 'best_fitness' in checkpoint:
-            enhanced_model_info['best_fitness'] = checkpoint['best_fitness']
+        # Standard checkpoint keys
+        for key in ['epoch', 'best_fitness', 'global_step']:
+            if key in checkpoint:
+                # Only include JSON-serializable values
+                value = checkpoint[key]
+                if isinstance(value, (int, float, str, bool, list, dict)):
+                    checkpoint_metadata[key] = value
+                    enhanced_model_info[f'checkpoint_{key}'] = value
+                else:
+                    checkpoint_metadata[key] = str(value)
+                    enhanced_model_info[f'checkpoint_{key}'] = str(value)
+        
+        # Look for hyperparameters
+        if 'hyp' in checkpoint:
+            hyp = checkpoint['hyp']
+            if isinstance(hyp, dict):
+                # Only include JSON-serializable hyperparameters
+                serializable_hyp = {}
+                for k, v in hyp.items():
+                    if isinstance(v, (int, float, str, bool, list)):
+                        serializable_hyp[k] = v
+                    elif isinstance(v, dict):
+                        serializable_hyp[k] = {k2: v2 for k2, v2 in v.items() if isinstance(v2, (int, float, str, bool, list))}
+                    else:
+                        serializable_hyp[k] = str(v)
+                enhanced_model_info['hyperparameters'] = serializable_hyp
+                
+                # Extract class names from hyperparameters if available
+                if 'names' in hyp:
+                    enhanced_model_info['classes'] = list(hyp['names'].values()) if isinstance(hyp['names'], dict) else hyp['names']
+        
+        # Check hyper_parameters (Lightning format)
+        if 'hyper_parameters' in checkpoint:
+            hyper_params = checkpoint['hyper_parameters']
+            if isinstance(hyper_params, dict):
+                # Extract class names
+                if 'names' in hyper_params:
+                    enhanced_model_info['classes'] = list(hyper_params['names'].values()) if isinstance(hyper_params['names'], dict) else hyper_params['names']
         
         # Look for class names in various possible locations
         for key in ['names', 'class_names', 'classes']:
             if key in checkpoint:
-                enhanced_model_info['classes'] = checkpoint[key]
+                if isinstance(checkpoint[key], dict):
+                    enhanced_model_info['classes'] = list(checkpoint[key].values())
+                else:
+                    enhanced_model_info['classes'] = checkpoint[key]
                 break
         
-        # Generate classes.json with warning
+        # Extract model architecture info if available
+        if 'model' in checkpoint and hasattr(checkpoint['model'], '__dict__'):
+            try:
+                enhanced_model_info['model_info'] = str(type(checkpoint['model']))
+            except:
+                pass
+        
+        # Generate classes.json with all extracted information
         self._generate_yolov7_classes_json(enhanced_model_info)
         
-        # Create a placeholder model.json to satisfy the web interface
+        # Create a comprehensive placeholder model.json
         placeholder_model = {
             "format": "graph-model",
             "generatedBy": "LaserWeed Converter (Fallback)",
             "convertedBy": "Manual Configuration",
-            "modelTopology": {"note": "Model conversion failed - using simple detection"},
-            "weightsManifest": []
+            "signature": {
+                "inputs": {
+                    "input": {
+                        "name": "input:0",
+                        "dtype": "DT_FLOAT",
+                        "tensorShape": {
+                            "dim": [
+                                {"size": "-1"},
+                                {"size": str(enhanced_model_info['input_size'][1])},
+                                {"size": str(enhanced_model_info['input_size'][0])},
+                                {"size": "3"}
+                            ]
+                        }
+                    }
+                },
+                "outputs": {
+                    "output": {
+                        "name": "output:0",
+                        "dtype": "DT_FLOAT"
+                    }
+                }
+            },
+            "modelTopology": {
+                "note": "Model conversion failed - configuration only",
+                "checkpointInfo": checkpoint_metadata,
+                "conversionAttempted": True,
+                "fallbackReason": "Checkpoint format incompatible with automatic conversion"
+            },
+            "weightsManifest": [],
+            "userDefinedMetadata": {
+                "checkpointSource": str(self.input_path.name),
+                "conversionDate": str(datetime.now()),
+                "originalFormat": "YOLOv7 Checkpoint",
+                "recommendedAction": "Use original YOLOv7 export tools or manual conversion"
+            }
         }
         
         model_json_path = self.output_path / "model.json"
         with open(model_json_path, 'w') as f:
             json.dump(placeholder_model, f, indent=2)
         
-        print("⚠️  Created placeholder model.json - web interface will fall back to simple detection")
+        # Create conversion instructions
+        instructions_path = self.output_path / "CONVERSION_INSTRUCTIONS.md"
+        instructions = f"""# Manual Conversion Instructions
+
+## Checkpoint Information
+- **File**: {self.input_path.name}
+- **Type**: YOLOv7 Checkpoint
+- **Size**: {self.input_path.stat().st_size / (1024*1024):.1f} MB
+
+## Available Keys in Checkpoint
+{list(checkpoint.keys())}
+
+## Recommended Conversion Methods
+
+### Method 1: Original YOLOv7 Export
+```bash
+# Clone YOLOv7 repository
+git clone https://github.com/WongKinYiu/yolov7.git
+cd yolov7
+
+# Export your checkpoint
+python export.py --weights {self.input_path} --grid --end2end --simplify --topk-all 100 --iou-thres 0.65 --conf-thres 0.35 --img-size {enhanced_model_info['input_size'][0]}
+```
+
+### Method 2: Ultralytics Export
+```bash
+# Install ultralytics
+pip install ultralytics
+
+# Try direct export
+yolo export model={self.input_path} format=onnx imgsz={enhanced_model_info['input_size'][0]}
+```
+
+### Method 3: Custom Script
+Create a custom export script based on your training setup.
+
+## Next Steps
+1. Use one of the methods above to create an ONNX file
+2. Convert ONNX to TensorFlow.js using: `tensorflowjs_converter --input_format=onnx --output_format=tfjs_graph_model your_model.onnx ./output_dir`
+3. Copy the generated files to replace this placeholder
+
+## Classes Configuration
+The classes.json file has been created with the detected or default class configuration.
+Update it if your model uses different classes.
+"""
+        
+        with open(instructions_path, 'w') as f:
+            f.write(instructions)
+        
+        print("\n📋 Created comprehensive fallback configuration:")
+        print(f"   ✓ {model_json_path.name} - Placeholder model definition")
+        print(f"   ✓ classes.json - Model configuration")
+        print(f"   ✓ {instructions_path.name} - Manual conversion guide")
+        print("\n💡 The web interface will show this model but conversion is needed for actual inference.")
+        
         return True  # Return true because we created the necessary files
     
     def _convert_onnx(self, onnx_path: Optional[str] = None) -> bool:

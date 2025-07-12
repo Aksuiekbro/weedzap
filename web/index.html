@@ -10,6 +10,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- TensorFlow.js -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <!-- ONNX.js for ONNX model support -->
+    <script src="https://cdn.jsdelivr.net/npm/onnxjs/dist/onnx.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -78,6 +80,8 @@
                                 <select id="modelSelector" class="model-select">
                                     <option value="simple">Simple Color Detection</option>
                                     <option value="yolov5s-weed">YOLOv5s Weed Detection</option>
+                                    <option value="tiny_model_680_final" data-recommended="true">🌟 YOLOv7-tiny Final ONNX (Recommended)</option>
+                                    <option value="tiny_model_680">YOLOv7-tiny Basic ONNX</option>
                                     <option value="custom">Custom Model</option>
                                 </select>
                             </div>
@@ -220,6 +224,7 @@
     </div>
 
     <script src="js/yolo-detector.js"></script>
+    <script src="js/onnx-detector.js"></script>
     <script src="js/model-manager.js"></script>
     <script src="script.js"></script>
 </body>

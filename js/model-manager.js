@@ -89,6 +89,13 @@ class ModelManager {
                 }
                 return;
             }
+            
+            // Handle custom model selection - don't try to load, just show upload interface
+            if (modelId === 'custom') {
+                this.updateStatus('Select files to upload custom model', '');
+                // Don't switch models, just return - the upload interface is shown by the other event listener
+                return;
+            }
 
             // Check if this is a checkpoint that needs conversion
             if (modelId.startsWith('checkpoint_')) {
@@ -132,7 +139,24 @@ class ModelManager {
             
         } catch (error) {
             console.error('Error switching model:', error);
-            this.updateStatus(`Error: ${error.message}`, 'error');
+            
+            // Provide specific error messages for different types of failures
+            let errorMessage = error.message;
+            if (error.message.includes('Model incomplete:')) {
+                // Extract the specific reason from the error message
+                const reason = error.message.replace('Model incomplete: ', '');
+                errorMessage = `Model incomplete: ${reason}`;
+            } else if (error.message.includes('incomplete')) {
+                errorMessage = `Model incomplete - requires conversion or proper model files`;
+            } else if (error.message.includes('404')) {
+                errorMessage = `Model files not found - check model installation`;
+            } else if (error.message.includes('Failed to load')) {
+                errorMessage = `Network error loading model`;
+            } else if (error.message.includes('versions.producer')) {
+                errorMessage = `Invalid model format - corrupted or incomplete model file`;
+            }
+            
+            this.updateStatus(`Error: ${errorMessage}`, 'error');
             
             // Fall back to simple detection
             this.currentModel = 'simple';
@@ -399,6 +423,7 @@ class ModelManager {
             if (response.ok) {
                 const index = await response.json();
                 this.loadModelsFromIndex(index);
+                this.updateModelSelector(); // Add models to UI dropdown
                 return;
             }
         } catch (error) {
@@ -407,7 +432,8 @@ class ModelManager {
 
         // Try your actual checkpoint file names
         const commonCheckpoints = [
-            'CropOrWeed2_640px_yolov7-tiny_epoch=37_lr=_batch=48_val_loss=11.115_map=0.592.ckpt'
+            'CropOrWeed2_640px_yolov7-tiny_epoch=37_lr=_batch=48_val_loss=11.115_map=0.592.ckpt',
+            'tiny_model_680.ckpt'
         ];
 
         for (const filename of commonCheckpoints) {

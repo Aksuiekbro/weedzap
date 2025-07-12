@@ -1,0 +1,51 @@
+{
+  "format": "graph-model",
+  "generatedBy": "LaserWeed Converter (Fallback)",
+  "convertedBy": "Manual Configuration",
+  "signature": {
+    "inputs": {
+      "input": {
+        "name": "input:0",
+        "dtype": "DT_FLOAT",
+        "tensorShape": {
+          "dim": [
+            {
+              "size": "-1"
+            },
+            {
+              "size": "640"
+            },
+            {
+              "size": "640"
+            },
+            {
+              "size": "3"
+            }
+          ]
+        }
+      }
+    },
+    "outputs": {
+      "output": {
+        "name": "output:0",
+        "dtype": "DT_FLOAT"
+      }
+    }
+  },
+  "modelTopology": {
+    "note": "Model conversion failed - configuration only",
+    "checkpointInfo": {
+      "epoch": 37,
+      "global_step": 4294
+    },
+    "conversionAttempted": true,
+    "fallbackReason": "Checkpoint format incompatible with automatic conversion"
+  },
+  "weightsManifest": [],
+  "userDefinedMetadata": {
+    "checkpointSource": "CropOrWeed2_640px_yolov7-tiny_epoch=37_lr=_batch=48_val_loss=11.115_map=0.592.ckpt",
+    "conversionDate": "2025-07-12 23:02:04.544901",
+    "originalFormat": "YOLOv7 Checkpoint",
+    "recommendedAction": "Use original YOLOv7 export tools or manual conversion"
+  }
+}

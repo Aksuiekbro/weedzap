@@ -1,0 +1,21 @@
+{
+  "classes": [
+    "broadleaf_weed",
+    "grass_weed",
+    "crop_plant",
+    "soil"
+  ],
+  "modelType": "yolov5s",
+  "inputSize": [640, 640],
+  "anchors": [
+    [10, 13, 16, 30, 33, 23],
+    [30, 61, 62, 45, 59, 119],
+    [116, 90, 156, 198, 373, 326]
+  ],
+  "strides": [8, 16, 32],
+  "threshold": 0.5,
+  "iouThreshold": 0.45,
+  "description": "YOLOv5s model trained for weed detection in agricultural environments",
+  "version": "1.0",
+  "author": "LaserWeed Project"
+}

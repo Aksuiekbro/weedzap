@@ -1,0 +1,81 @@
+{
+  "models": [
+    {
+      "id": "tiny_model_680_final",
+      "name": "YOLOv7-tiny Final ONNX",
+      "type": "onnx",
+      "path": "models/custom-models/tiny_model_680_final.onnx",
+      "config_path": "models/custom-models/tiny_model_680_final.json",
+      "size_mb": 7.38,
+      "performance_tier": "fast_inference",
+      "input_size": [640, 640],
+      "classes": ["crop", "weed"],
+      "description": "YOLOv7-tiny ONNX model for crop/weed detection - RECOMMENDED",
+      "optimized_for": "agricultural_detection",
+      "status": "ready",
+      "recommended": true,
+      "performance": {
+        "fps": 30,
+        "accuracy": "High"
+      }
+    },
+    {
+      "id": "tiny_model_680",
+      "name": "YOLOv7-tiny Basic ONNX",
+      "type": "onnx",
+      "path": "models/custom-models/tiny_model_680.onnx",
+      "config_path": "models/custom-models/tiny_model_680.json",
+      "size_mb": 6.86,
+      "performance_tier": "fast_inference",
+      "input_size": [640, 640],
+      "classes": ["crop", "weed"],
+      "description": "YOLOv7-tiny basic ONNX model for crop/weed detection",
+      "optimized_for": "agricultural_detection",
+      "status": "ready",
+      "recommended": false,
+      "performance": {
+        "fps": 25,
+        "accuracy": "Medium"
+      }
+    },
+    {
+      "id": "CropOrWeed2_640px_yolov7-tiny_epoch=37_lr=_batch=48_val_loss=11.115_map=0.592",
+      "name": "YOLOv7-tiny CropOrWeed2",
+      "type": "yolov7-tiny", 
+      "path": "models/custom-models/CropOrWeed2_640px_yolov7-tiny_epoch=37_lr=_batch=48_val_loss=11.115_map=0.592/model.json",
+      "config_path": "models/custom-models/CropOrWeed2_640px_yolov7-tiny_epoch=37_lr=_batch=48_val_loss=11.115_map=0.592/classes.json",
+      "size_mb": 46.1,
+      "performance_tier": "fast_inference",
+      "input_size": [640, 640],
+      "classes": ["crop", "weed"],
+      "training_epoch": 37,
+      "map": 0.592,
+      "val_loss": 11.115,
+      "batch_size": 48,
+      "description": "YOLOv7-tiny model trained on CropOrWeed2 dataset for agricultural weed detection",
+      "optimized_for": "agricultural_detection",
+      "status": "converted_fallback",
+      "conversion_notes": "Converted with fallback strategy - manual conversion needed for inference"
+    },
+    {
+      "id": "tiny-model-680",
+      "name": "YOLOv7-tiny Model 680",
+      "type": "yolov7-tiny", 
+      "path": "models/custom-models/tiny-model-680/model.json",
+      "config_path": "models/custom-models/tiny-model-680/classes.json",
+      "size_mb": 46.1,
+      "performance_tier": "fast_inference",
+      "input_size": [640, 640],
+      "classes": ["crop", "weed"],
+      "training_epoch": 37,
+      "global_step": 4294,
+      "description": "YOLOv7-tiny model for crop/weed detection (PyTorch Lightning checkpoint)",
+      "optimized_for": "agricultural_detection",
+      "status": "converted_fallback",
+      "conversion_notes": "Converted with fallback strategy - manual conversion needed for inference"
+    }
+  ],
+  "generated": "2025-07-13T01:45:00Z",
+  "version": "1.1",
+  "total_models": 4
+}

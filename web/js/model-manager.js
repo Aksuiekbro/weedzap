@@ -7,7 +7,9 @@
 class ModelManager {
     constructor() {
         this.yoloDetector = new YOLODetector();
+        this.onnxDetector = new ONNXDetector();
         this.currentModel = 'simple';
+        this.currentDetector = null;
         this.availableModels = {
             'simple': {
                 name: 'Simple Color Detection',
@@ -19,6 +21,21 @@ class ModelManager {
                 type: 'yolo',
                 modelPath: 'models/yolov5s-weed/model.json',
                 configPath: 'models/yolov5s-weed/classes.json',
+                loaded: false
+            },
+            'tiny_model_680_final': {
+                name: 'YOLOv7-tiny Final ONNX',
+                type: 'onnx',
+                modelPath: 'models/custom-models/tiny_model_680_final.onnx',
+                configPath: 'models/custom-models/tiny_model_680_final.json',
+                loaded: false,
+                recommended: true
+            },
+            'tiny_model_680': {
+                name: 'YOLOv7-tiny Basic ONNX',
+                type: 'onnx',
+                modelPath: 'models/custom-models/tiny_model_680.onnx',
+                configPath: 'models/custom-models/tiny_model_680.json',
                 loaded: false
             }
         };
@@ -89,6 +106,13 @@ class ModelManager {
                 }
                 return;
             }
+            
+            // Handle custom model selection - don't try to load, just show upload interface
+            if (modelId === 'custom') {
+                this.updateStatus('Select files to upload custom model', '');
+                // Don't switch models, just return - the upload interface is shown by the other event listener
+                return;
+            }
 
             // Check if this is a checkpoint that needs conversion
             if (modelId.startsWith('checkpoint_')) {
@@ -111,16 +135,20 @@ class ModelManager {
                 }
             }
 
-            // Load YOLO model
+            // Load model based on type
             const model = this.availableModels[modelId] || this.customModels.get(modelId);
             if (!model) {
                 throw new Error(`Model ${modelId} not found`);
             }
 
             if (model.type === 'yolo') {
+                // Dispose ONNX detector if switching from ONNX
+                this.onnxDetector.dispose();
+                
                 await this.yoloDetector.loadModel(model.modelPath, model.configPath);
                 model.loaded = true;
                 this.currentModel = modelId;
+                this.currentDetector = this.yoloDetector;
                 
                 const modelInfo = this.yoloDetector.getModelInfo();
                 this.updateStatus(`${model.name} Loaded (${modelInfo.classes.length} classes)`, 'loaded');
@@ -128,11 +156,43 @@ class ModelManager {
                 if (this.onModelChangeCallback) {
                     this.onModelChangeCallback('yolo', this.yoloDetector);
                 }
+            } else if (model.type === 'onnx') {
+                // Dispose YOLO detector if switching from YOLO
+                this.yoloDetector.dispose();
+                
+                await this.onnxDetector.loadModel(model.modelPath, model.configPath);
+                model.loaded = true;
+                this.currentModel = modelId;
+                this.currentDetector = this.onnxDetector;
+                
+                const modelInfo = this.onnxDetector.getModelInfo();
+                this.updateStatus(`${model.name} Loaded (${modelInfo.classes.length} classes)`, 'loaded');
+                
+                if (this.onModelChangeCallback) {
+                    this.onModelChangeCallback('onnx', this.onnxDetector);
+                }
             }
             
         } catch (error) {
             console.error('Error switching model:', error);
-            this.updateStatus(`Error: ${error.message}`, 'error');
+            
+            // Provide specific error messages for different types of failures
+            let errorMessage = error.message;
+            if (error.message.includes('Model incomplete:')) {
+                // Extract the specific reason from the error message
+                const reason = error.message.replace('Model incomplete: ', '');
+                errorMessage = `Model incomplete: ${reason}`;
+            } else if (error.message.includes('incomplete')) {
+                errorMessage = `Model incomplete - requires conversion or proper model files`;
+            } else if (error.message.includes('404')) {
+                errorMessage = `Model files not found - check model installation`;
+            } else if (error.message.includes('Failed to load')) {
+                errorMessage = `Network error loading model`;
+            } else if (error.message.includes('versions.producer')) {
+                errorMessage = `Invalid model format - corrupted or incomplete model file`;
+            }
+            
+            this.updateStatus(`Error: ${errorMessage}`, 'error');
             
             // Fall back to simple detection
             this.currentModel = 'simple';
@@ -393,21 +453,28 @@ class ModelManager {
      * Scan for .ckpt files in the models directory
      */
     async scanForCheckpoints() {
+        console.log('🔍 Starting checkpoint scan...');
         try {
             // Try to fetch models index first
+            console.log('📂 Trying to fetch models_index.json...');
             const response = await fetch('models_index.json');
             if (response.ok) {
+                console.log('✅ models_index.json found, loading...');
                 const index = await response.json();
                 this.loadModelsFromIndex(index);
+                this.updateModelSelector(); // Add models to UI dropdown
                 return;
+            } else {
+                console.log('❌ models_index.json returned:', response.status);
             }
         } catch (error) {
-            console.log('No models index found, scanning directory...');
+            console.log('❌ No models index found, scanning directory...', error);
         }
 
         // Try your actual checkpoint file names
         const commonCheckpoints = [
-            'CropOrWeed2_640px_yolov7-tiny_epoch=37_lr=_batch=48_val_loss=11.115_map=0.592.ckpt'
+            'CropOrWeed2_640px_yolov7-tiny_epoch=37_lr=_batch=48_val_loss=11.115_map=0.592.ckpt',
+            'tiny_model_680.ckpt'
         ];
 
         for (const filename of commonCheckpoints) {
@@ -442,7 +509,10 @@ class ModelManager {
     loadModelsFromIndex(index) {
         if (!index.models) return;
 
+        console.log('📥 Loading models from index:', index);
+
         for (const modelInfo of index.models) {
+            console.log('➕ Adding model to availableModels:', modelInfo.id, modelInfo.name);
             this.availableModels[modelInfo.id] = {
                 name: `${modelInfo.name} (${modelInfo.type})`,
                 type: 'yolo',
@@ -455,7 +525,8 @@ class ModelManager {
             };
         }
 
-        console.log(`Loaded ${index.models.length} models from index`);
+        console.log(`✅ Loaded ${index.models.length} models from index`);
+        console.log('📋 Available models now:', Object.keys(this.availableModels));
     }
 
     /**
@@ -602,6 +673,9 @@ class ModelManager {
      * Update model selector with detected checkpoints
      */
     updateModelSelector() {
+        console.log('🔄 Updating model selector...');
+        console.log('Available models:', Object.keys(this.availableModels));
+        
         // Clear existing options except defaults
         const options = this.elements.modelSelector.querySelectorAll('option');
         options.forEach(option => {
@@ -613,6 +687,7 @@ class ModelManager {
         // Add converted models
         Object.entries(this.availableModels).forEach(([id, model]) => {
             if (id !== 'simple' && id !== 'yolov5s-weed') {
+                console.log(`➕ Adding model to selector: ${id} - ${model.name}`);
                 this.addModelToSelector(id, model.name, model.isConverted);
             }
         });
@@ -628,6 +703,8 @@ class ModelManager {
         this.customModels.forEach((model, id) => {
             this.addCustomModelToSelector(id, model);
         });
+        
+        console.log('✅ Model selector updated');
     }
 
     /**
@@ -744,6 +821,7 @@ class ModelManager {
      */
     dispose() {
         this.yoloDetector.dispose();
+        this.onnxDetector.dispose();
         
         // Clean up custom model URLs
         this.customModels.forEach(model => {

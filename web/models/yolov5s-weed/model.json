@@ -1,0 +1,68 @@
+{
+  "format": "graph-model",
+  "generatedBy": "1.15.0",
+  "convertedBy": "TensorFlow.js Converter v3.20.0",
+  "signature": {
+    "inputs": {
+      "input": {
+        "name": "input:0",
+        "dtype": "DT_FLOAT",
+        "tensorShape": {
+          "dim": [
+            {
+              "size": "-1"
+            },
+            {
+              "size": "640"
+            },
+            {
+              "size": "640"
+            },
+            {
+              "size": "3"
+            }
+          ]
+        }
+      }
+    },
+    "outputs": {
+      "output": {
+        "name": "output:0",
+        "dtype": "DT_FLOAT",
+        "tensorShape": {
+          "dim": [
+            {
+              "size": "-1"
+            },
+            {
+              "size": "25200"
+            },
+            {
+              "size": "9"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "modelTopology": {
+    "node": [],
+    "library": {},
+    "versions": {
+      "producer": 1,
+      "minConsumer": 12
+    },
+    "placeholder_info": {
+      "status": "incomplete",
+      "reason": "Model weights not available - placeholder configuration only"
+    }
+  },
+  "weightsManifest": [],
+  "userDefinedMetadata": {
+    "modelType": "yolov5s",
+    "classes": ["broadleaf_weed", "grass_weed", "crop_plant", "soil"],
+    "status": "placeholder",
+    "note": "This is a placeholder model configuration. Actual TensorFlow.js model weights are required for inference.",
+    "recommendedAction": "Obtain a complete YOLOv5s TensorFlow.js model with weights (.bin files)"
+  }
+}

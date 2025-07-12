@@ -1,0 +1,3 @@
+Manual ONNX conversion required for: custom-models/tiny_model_680.ckpt
+Use YOLOv7 export script with these parameters:
+python yolov7/export.py --weights custom-models/tiny_model_680.ckpt --grid --end2end --simplify --img-size 640

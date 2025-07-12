@@ -1,0 +1,16 @@
+{
+  "classes": [
+    "crop",
+    "weed"
+  ],
+  "modelType": "yolov7-tiny",
+  "inputSize": [
+    640,
+    640
+  ],
+  "threshold": 0.35,
+  "iouThreshold": 0.65,
+  "description": "YOLOv7 tiny model for crop/weed detection",
+  "optimizedFor": "agricultural_detection",
+  "performance": "fast_inference"
+}

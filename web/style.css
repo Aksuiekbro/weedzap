@@ -363,6 +363,13 @@ input[type="checkbox"]:checked::after {
     min-width: 200px;
 }
 
+/* Recommended model styling */
+.model-select option[data-recommended="true"] {
+    background: linear-gradient(135deg, var(--accent-green), var(--accent-green-dim));
+    color: var(--bg-primary);
+    font-weight: 600;
+}
+
 .model-select:hover {
     background: var(--bg-glass-hover);
 }

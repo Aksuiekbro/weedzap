@@ -52,6 +52,39 @@ class YOLODetector {
                 this.adjustYOLOv7Settings();
             }
 
+            // Check if this is a placeholder model first
+            const modelResponse = await fetch(modelPath);
+            if (!modelResponse.ok) {
+                throw new Error(`Failed to load model: ${modelResponse.status}`);
+            }
+            const modelJson = await modelResponse.json();
+            
+            // Detect placeholder models
+            const isPlaceholder = (
+                // Check for placeholder_info in modelTopology
+                (modelJson.modelTopology?.placeholder_info?.status === 'incomplete') ||
+                // Check for empty node array (no actual model graph)
+                (modelJson.modelTopology?.node?.length === 0) ||
+                // Check userDefinedMetadata status
+                (modelJson.userDefinedMetadata?.status === 'placeholder') ||
+                // Check for missing weights
+                (modelJson.weightsManifest?.length === 0) ||
+                // Legacy checks for other placeholder formats
+                (modelJson.modelTopology?.status === 'incomplete') || 
+                (modelJson.modelTopology?.note?.includes('incomplete')) ||
+                (modelJson.modelTopology?.note?.includes('conversion failed'))
+            );
+            
+            if (isPlaceholder) {
+                const reason = modelJson.modelTopology?.placeholder_info?.reason ||
+                             modelJson.modelTopology?.reason ||
+                             modelJson.userDefinedMetadata?.note ||
+                             'Model is incomplete or missing required components';
+                
+                console.warn('Placeholder model detected - cannot perform inference');
+                throw new Error(`Model incomplete: ${reason}`);
+            }
+            
             // Load TensorFlow.js model
             this.model = await tf.loadGraphModel(modelPath);
             
@@ -81,29 +114,64 @@ class YOLODetector {
             throw new Error('Model not loaded');
         }
 
+        // Additional safety check - verify model has inputs/outputs
+        if (!this.model || !this.model.inputs || this.model.inputs.length === 0) {
+            console.error('Model validation failed: no input nodes found');
+            throw new Error('Model has no input nodes - likely incomplete or corrupted');
+        }
+
         try {
             // Preprocess image
             const input = this.preprocessImage(imageElement);
             
-            // Run inference
-            const predictions = this.model.predict(input);
+            // Additional safety check before inference
+            try {
+                // Run inference with error handling
+                const predictions = this.model.predict(input);
+                
+                // Verify we got valid predictions
+                if (!predictions) {
+                    throw new Error('Model inference returned null/undefined');
+                }
+                
+                return await this.handleInferenceResult(predictions, input, imageElement);
+                
+            } catch (inferenceError) {
+                // Clean up input tensor before re-throwing
+                input.dispose();
+                
+                if (inferenceError.message.includes('Input tensor count mismatch') || 
+                    inferenceError.message.includes('non-resource placeholders')) {
+                    throw new Error('Model has no valid input nodes - inference failed');
+                }
+                throw inferenceError;
+            }
             
+        } catch (error) {
+            console.error('Error in detect():', error);
+            throw error;
+        }
+    }
+    
+    /**
+     * Handle inference result and cleanup
+     * @private
+     */
+    async handleInferenceResult(predictions, input, imageElement) {
+        try {
             // Post-process results
             const detections = await this.postProcess(predictions, imageElement.width, imageElement.height);
             
-            // Clean up tensors
+            return detections;
+            
+        } finally {
+            // Always clean up tensors
             input.dispose();
             if (Array.isArray(predictions)) {
                 predictions.forEach(pred => pred.dispose());
             } else {
                 predictions.dispose();
             }
-            
-            return detections;
-            
-        } catch (error) {
-            console.error('Error during detection:', error);
-            throw error;
         }
     }
 

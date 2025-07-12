@@ -21,6 +21,11 @@ class LaserWeedController {
         this.currentDetectionMode = 'simple';
         this.yoloDetector = null;
         
+        // Error tracking for model failures
+        this.modelErrorCount = 0;
+        this.maxModelErrors = 3;
+        this.lastModelError = null;
+        
         this.initializeElements();
         this.setupEventListeners();
         this.initializeModels();
@@ -134,12 +139,24 @@ class LaserWeedController {
             this.currentDetectionMode = detectionMode;
             this.yoloDetector = detector;
             
+            // Reset error tracking when successfully switching models
+            this.resetModelErrorTracking();
+            
             console.log(`Switched to ${detectionMode} detection mode`);
             
             // Reset weed count when switching models
             this.weedCount = 0;
             this.weedCountElement.textContent = this.weedCount;
         });
+        
+        // Set default to recommended ONNX model if available
+        setTimeout(() => {
+            if (this.modelManager.isModelAvailable('tiny_model_680_final')) {
+                console.log('🌟 Setting default model to recommended ONNX model');
+                this.modelSelector.value = 'tiny_model_680_final';
+                this.modelManager.switchModel('tiny_model_680_final');
+            }
+        }, 1000); // Give time for model scanning to complete
         
         // Set up status change callback
         this.modelManager.onStatusChange((message, type) => {
@@ -508,6 +525,9 @@ class LaserWeedController {
             if (this.currentDetectionMode === 'yolo' && this.yoloDetector) {
                 // Use YOLO detection
                 detectedWeeds = await this.yoloDetector.detect(video);
+            } else if (this.currentDetectionMode === 'onnx' && this.yoloDetector) {
+                // Use ONNX detection (yoloDetector is actually the current detector)
+                detectedWeeds = await this.yoloDetector.detect(video);
             } else {
                 // Use simple color detection
                 detectedWeeds = this.detectGreenAreasSimple(video);
@@ -532,12 +552,66 @@ class LaserWeedController {
             
         } catch (error) {
             console.error('Error in processFrame:', error);
-            // Fall back to simple detection on error
-            if (this.currentDetectionMode === 'yolo') {
+            
+            // Track model errors to prevent repeated failures
+            if (this.currentDetectionMode === 'yolo' || this.currentDetectionMode === 'onnx') {
+                this.modelErrorCount++;
+                this.lastModelError = Date.now();
+                
+                console.warn(`Model error ${this.modelErrorCount}/${this.maxModelErrors}: ${error.message}`);
+                
+                // If too many errors, automatically switch to simple detection
+                if (this.modelErrorCount >= this.maxModelErrors) {
+                    console.error('🚫 Too many model errors, switching to simple detection');
+                    this.handleModelFailure(error);
+                    return; // Exit early to prevent further processing
+                }
+                
+                // Temporary fallback for this frame only
                 detectedWeeds = this.detectGreenAreasSimple(video);
                 this.drawBoundingBoxes(ctx, detectedWeeds, canvas.width, canvas.height, video.videoWidth, video.videoHeight);
             }
         }
+    }
+
+    /**
+     * Handle model failure by switching back to simple detection
+     * @param {Error} error - The error that caused the failure
+     */
+    handleModelFailure(error) {
+        console.error('🚨 Model failure detected, switching to simple detection permanently');
+        
+        // Switch to simple detection
+        this.currentDetectionMode = 'simple';
+        this.yoloDetector = null;
+        
+        // Update model selector UI if it exists
+        if (this.modelManager && this.modelManager.elements && this.modelManager.elements.modelSelector) {
+            this.modelManager.elements.modelSelector.value = 'simple';
+        }
+        
+        // Update status display
+        if (this.modelManager && this.modelManager.updateStatus) {
+            const errorMsg = error.message.includes('Model has no valid input nodes') 
+                ? 'Model incomplete - switched to simple detection'
+                : `Model error: ${error.message}`;
+            this.modelManager.updateStatus(`Error: ${errorMsg}`, 'error');
+        }
+        
+        // Reset error count for future model attempts
+        this.modelErrorCount = 0;
+        this.lastModelError = null;
+        
+        console.log('✅ Successfully switched to simple color detection');
+    }
+
+    /**
+     * Reset model error tracking when successfully loading a new model
+     */
+    resetModelErrorTracking() {
+        this.modelErrorCount = 0;
+        this.lastModelError = null;
+        console.log('🔄 Model error tracking reset');
     }
 
     // Simple green area detection for video element

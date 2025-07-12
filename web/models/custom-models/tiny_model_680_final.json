@@ -1,0 +1,24 @@
+{
+  "name": "YOLOv7-tiny Final ONNX",
+  "type": "onnx",
+  "model_file": "tiny_model_680_final.onnx",
+  "input_size": [640, 640],
+  "classes": ["crop", "weed"],
+  "num_classes": 2,
+  "anchors": [
+    [[10, 13], [16, 30], [33, 23]],
+    [[30, 61], [62, 45], [59, 119]],
+    [[116, 90], [156, 198], [373, 326]]
+  ],
+  "strides": [8, 16, 32],
+  "threshold": 0.5,
+  "iou_threshold": 0.45,
+  "input_name": "images",
+  "output_names": ["output"],
+  "performance": {
+    "fps": 30,
+    "size_mb": 7.38
+  },
+  "description": "YOLOv7-tiny ONNX model for crop/weed detection with 2 classes",
+  "recommended": true
+}

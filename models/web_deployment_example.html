@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crop/Weed Detection - ONNX.js</title>
+    <script src="https://cdn.jsdelivr.net/npm/onnxjs/dist/onnx.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .upload-area { border: 2px dashed #ccc; padding: 40px; text-align: center; margin: 20px 0; }
+        .upload-area:hover { border-color: #999; }
+        .preview { max-width: 100%; height: auto; margin: 20px 0; }
+        .results { background: #f5f5f5; padding: 20px; margin: 20px 0; border-radius: 8px; }
+        .loading { color: #666; font-style: italic; }
+        .button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+        .button:hover { background: #0056b3; }
+        .button:disabled { background: #ccc; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <h1>🌱 Crop/Weed Detection</h1>
+    <p>Upload an image to detect crops and weeds using AI</p>
+    
+    <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+        <p>Click here or drag & drop an image</p>
+        <input type="file" id="fileInput" accept="image/*" style="display: none;">
+    </div>
+    
+    <div id="preview"></div>
+    <button id="analyzeBtn" class="button" disabled>Analyze Image</button>
+    <div id="results"></div>
+
+    <script>
+        let session = null;
+        let imageData = null;
+
+        // Initialize ONNX session
+        async function initModel() {
+            try {
+                console.log('Loading ONNX model...');
+                // You'll need to host your ONNX file and update this URL
+                session = new onnx.InferenceSession();
+                await session.loadModel('./tiny_model_680_final.onnx');
+                console.log('Model loaded successfully!');
+                document.getElementById('results').innerHTML = '<div style="color: green;">✅ Model loaded and ready!</div>';
+            } catch (error) {
+                console.error('Failed to load model:', error);
+                document.getElementById('results').innerHTML = '<div style="color: red;">❌ Failed to load model</div>';
+            }
+        }
+
+        // Handle file upload
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = function() {
+                        // Display preview
+                        document.getElementById('preview').innerHTML = 
+                            `<img src="${e.target.result}" class="preview" alt="Uploaded image">`;
+                        
+                        // Process image for model
+                        processImage(img);
+                        document.getElementById('analyzeBtn').disabled = false;
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Process image to model input format
+        function processImage(img) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Resize to 640x640
+            canvas.width = 640;
+            canvas.height = 640;
+            ctx.drawImage(img, 0, 0, 640, 640);
+            
+            // Get image data and normalize
+            const imageData = ctx.getImageData(0, 0, 640, 640);
+            const data = imageData.data;
+            
+            // Convert to CHW format and normalize to [0,1]
+            const input = new Float32Array(1 * 3 * 640 * 640);
+            for (let i = 0; i < 640 * 640; i++) {
+                input[i] = data[i * 4] / 255.0;           // R
+                input[640 * 640 + i] = data[i * 4 + 1] / 255.0;  // G
+                input[640 * 640 * 2 + i] = data[i * 4 + 2] / 255.0; // B
+            }
+            
+            imageData = input;
+        }
+
+        // Run inference
+        async function runInference() {
+            if (!session || !imageData) return;
+            
+            document.getElementById('results').innerHTML = '<div class="loading">🔄 Analyzing image...</div>';
+            
+            try {
+                // Create input tensor
+                const inputTensor = new onnx.Tensor(imageData, 'float32', [1, 3, 640, 640]);
+                
+                // Run inference
+                const outputMap = await session.run([inputTensor]);
+                const outputs = Array.from(outputMap.values());
+                
+                // Process results
+                const results = processResults(outputs);
+                displayResults(results);
+                
+            } catch (error) {
+                console.error('Inference failed:', error);
+                document.getElementById('results').innerHTML = '<div style="color: red;">❌ Analysis failed</div>';
+            }
+        }
+
+        // Process model outputs
+        function processResults(outputs) {
+            let totalDetections = 0;
+            const scaleResults = [];
+            
+            outputs.forEach((output, i) => {
+                const [batch, channels, height, width] = output.dims;
+                const data = output.data;
+                
+                // Count confident detections (simple threshold)
+                let confidentCount = 0;
+                for (let j = 0; j < data.length; j += channels) {
+                    // Assuming objectness is at index 4 in each prediction
+                    if (data[j + 4] > 0.5) {
+                        confidentCount++;
+                    }
+                }
+                
+                scaleResults.push({
+                    scale: `Scale ${i + 1}`,
+                    dimensions: `${height}x${width}`,
+                    totalPredictions: height * width * 3,
+                    confidentDetections: confidentCount
+                });
+                
+                totalDetections += confidentCount;
+            });
+            
+            return {
+                totalDetections,
+                scaleResults,
+                processingTime: Date.now()
+            };
+        }
+
+        // Display results
+        function displayResults(results) {
+            let html = '<div class="results">';
+            html += '<h3>🎯 Detection Results</h3>';
+            html += `<p><strong>Total Confident Detections:</strong> ${results.totalDetections}</p>`;
+            
+            html += '<h4>Detection Scales:</h4>';
+            results.scaleResults.forEach(scale => {
+                html += `<p><strong>${scale.scale}</strong> (${scale.dimensions}): ${scale.confidentDetections} detections</p>`;
+            });
+            
+            html += '<h4>Interpretation:</h4>';
+            if (results.totalDetections > 100) {
+                html += '<p style="color: orange;">🌾 High vegetation density detected - likely contains both crops and weeds</p>';
+            } else if (results.totalDetections > 20) {
+                html += '<p style="color: green;">🌱 Moderate vegetation detected - good crop growth</p>';
+            } else {
+                html += '<p style="color: blue;">🔍 Low vegetation density - sparse or early growth stage</p>';
+            }
+            
+            html += '<p><em>Note: This is a simplified analysis. Full post-processing would provide precise crop/weed locations.</em></p>';
+            html += '</div>';
+            
+            document.getElementById('results').innerHTML = html;
+        }
+
+        // Event listeners
+        document.getElementById('analyzeBtn').addEventListener('click', runInference);
+
+        // Initialize on page load
+        window.addEventListener('load', initModel);
+    </script>
+</body>
+</html>
