@@ -141,10 +141,15 @@ class ModelManager {
                 throw new Error(`Model ${modelId} not found`);
             }
 
+            console.log(`Loading model: ${model.name} (type: ${model.type})`);
+            console.log(`Model paths: ${model.modelPath}, ${model.configPath}`);
+
             if (model.type === 'yolo') {
                 // Dispose ONNX detector if switching from ONNX
+                console.log('🔄 Disposing previous ONNX detector');
                 this.onnxDetector.dispose();
                 
+                console.log(`Using YOLO detector for model: ${model.modelPath}`);
                 await this.yoloDetector.loadModel(model.modelPath, model.configPath);
                 model.loaded = true;
                 this.currentModel = modelId;
@@ -160,17 +165,66 @@ class ModelManager {
                 // Dispose YOLO detector if switching from YOLO
                 this.yoloDetector.dispose();
                 
-                await this.onnxDetector.loadModel(model.modelPath, model.configPath);
-                model.loaded = true;
-                this.currentModel = modelId;
-                this.currentDetector = this.onnxDetector;
+                console.log(`🎯 Loading ONNX model: ${model.modelPath}`);
+                console.log(`🔧 Config: ${model.configPath}`);
                 
-                const modelInfo = this.onnxDetector.getModelInfo();
-                this.updateStatus(`${model.name} Loaded (${modelInfo.classes.length} classes)`, 'loaded');
-                
-                if (this.onModelChangeCallback) {
-                    this.onModelChangeCallback('onnx', this.onnxDetector);
+                try {
+                    // Phase 2 Enhancement: Pre-validate model before loading
+                    console.log('🔍 Pre-validating ONNX model...');
+                    const validation = await this.onnxDetector.validateModel(model.modelPath, model.configPath);
+                    
+                    if (!validation.valid) {
+                        const errorMsg = this._createUserFriendlyErrorMessage(validation);
+                        throw new Error(errorMsg);
+                    }
+                    
+                    if (validation.warnings.length > 0) {
+                        console.warn('⚠️ Model validation warnings:', validation.warnings);
+                        this.updateStatus(`Loading with warnings: ${validation.score}/100 score`, 'warning');
+                    }
+                    
+                    const loadSuccess = await this.onnxDetector.loadModel(model.modelPath, model.configPath);
+                    
+                    if (!loadSuccess) {
+                        throw new Error('ONNX model loading returned false');
+                    }
+                    
+                    model.loaded = true;
+                    this.currentModel = modelId;
+                    this.currentDetector = this.onnxDetector;
+                    
+                    const modelInfo = this.onnxDetector.getModelInfo();
+                    console.log('✅ ONNX model loaded successfully:', modelInfo);
+                    
+                    this.updateStatus(`${model.name} Loaded (${modelInfo.classes.length} classes)`, 'loaded');
+                    
+                    if (this.onModelChangeCallback) {
+                        this.onModelChangeCallback('onnx', this.onnxDetector);
+                    }
+                    
+                } catch (onnxError) {
+                    console.error('❌ ONNX model loading failed:', onnxError);
+                    
+                    // Fallback to simple detection
+                    console.log('🔄 Falling back to simple detection due to ONNX error');
+                    this.currentModel = 'simple';
+                    this.currentDetector = null;
+                    
+                    this.updateStatus(`ONNX Error: ${onnxError.message} - Using Simple Detection`, 'error');
+                    
+                    if (this.onModelChangeCallback) {
+                        this.onModelChangeCallback('simple', null);
+                    }
+                    
+                    // Update UI to show simple mode
+                    if (this.elements && this.elements.modelSelector) {
+                        this.elements.modelSelector.value = 'simple';
+                    }
+                    
+                    throw onnxError; // Re-throw to trigger general error handling
                 }
+            } else {
+                throw new Error(`Unsupported model type: ${model.type}`);
             }
             
         } catch (error) {
@@ -515,7 +569,7 @@ class ModelManager {
             console.log('➕ Adding model to availableModels:', modelInfo.id, modelInfo.name);
             this.availableModels[modelInfo.id] = {
                 name: `${modelInfo.name} (${modelInfo.type})`,
-                type: 'yolo',
+                type: modelInfo.type, // Use the actual type from the index
                 modelPath: modelInfo.path,
                 configPath: modelInfo.config_path,
                 loaded: false,
@@ -814,6 +868,58 @@ class ModelManager {
         });
         
         return status;
+    }
+
+    /**
+     * Create user-friendly error messages from validation results
+     * @private
+     */
+    _createUserFriendlyErrorMessage(validation) {
+        if (validation.errors.length === 0) {
+            return 'Model validation passed but loading failed for unknown reasons.';
+        }
+
+        // Categorize errors for better user messages
+        const errors = validation.errors;
+        let userMessage = '';
+        let suggestions = [];
+
+        // Check for common error patterns
+        if (errors.some(err => err.includes('not accessible') || err.includes('HTTP 404'))) {
+            userMessage = 'Model files are missing or inaccessible.';
+            suggestions.push('Check if the model files exist');
+            suggestions.push('Verify your network connection');
+        } else if (errors.some(err => err.includes('Invalid JSON') || err.includes('Config validation'))) {
+            userMessage = 'Model configuration is invalid or corrupted.';
+            suggestions.push('Check the model configuration file');
+            suggestions.push('Re-download the model if necessary');
+        } else if (errors.some(err => err.includes('ONNX.js not available'))) {
+            userMessage = 'Your browser does not support ONNX models.';
+            suggestions.push('Try using a modern browser (Chrome, Firefox, Safari)');
+            suggestions.push('Update your browser to the latest version');
+        } else if (errors.some(err => err.includes('too small') || err.includes('empty'))) {
+            userMessage = 'Model file appears to be corrupted or incomplete.';
+            suggestions.push('Re-download the model file');
+            suggestions.push('Check your network connection');
+        } else if (errors.some(err => err.includes('timeout'))) {
+            userMessage = 'Model loading timed out due to slow network or large file.';
+            suggestions.push('Check your internet connection');
+            suggestions.push('Try again later');
+        } else {
+            userMessage = 'Model validation failed for multiple reasons.';
+            suggestions.push('Try a different model');
+            suggestions.push('Contact support if the problem persists');
+        }
+
+        // Add compatibility score if available
+        if (validation.score < 70) {
+            userMessage += ` (Compatibility: ${validation.score}/100)`;
+        }
+
+        // Add specific error details for debugging
+        const detailMessage = errors.slice(0, 3).join('; '); // Show first 3 errors
+        
+        return `${userMessage} ${suggestions.length > 0 ? '\n\nSuggestions: ' + suggestions.join(', ') : ''}\n\nTechnical details: ${detailMessage}`;
     }
 
     /**

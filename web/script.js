@@ -20,6 +20,7 @@ class LaserWeedController {
         this.modelManager = new ModelManager();
         this.currentDetectionMode = 'simple';
         this.yoloDetector = null;
+        this.currentDetector = null; // Store the active detector (YOLO or ONNX)
         
         // Error tracking for model failures
         this.modelErrorCount = 0;
@@ -137,6 +138,9 @@ class LaserWeedController {
         // Set up model change callback
         this.modelManager.onModelChange((detectionMode, detector) => {
             this.currentDetectionMode = detectionMode;
+            this.currentDetector = detector; // Store the actual detector (YOLO or ONNX)
+            
+            // For backward compatibility, also set yoloDetector
             this.yoloDetector = detector;
             
             // Reset error tracking when successfully switching models
@@ -151,12 +155,16 @@ class LaserWeedController {
         
         // Set default to recommended ONNX model if available
         setTimeout(() => {
-            if (this.modelManager.isModelAvailable('tiny_model_680_final')) {
+            // Check if the recommended model exists (not necessarily loaded)
+            const recommendedModel = this.modelManager.availableModels['tiny_model_680_final'];
+            if (recommendedModel) {
                 console.log('🌟 Setting default model to recommended ONNX model');
                 this.modelSelector.value = 'tiny_model_680_final';
                 this.modelManager.switchModel('tiny_model_680_final');
+            } else {
+                console.log('⚠️ Recommended ONNX model not found, staying with simple detection');
             }
-        }, 1000); // Give time for model scanning to complete
+        }, 500); // Reduced timeout for faster loading
         
         // Set up status change callback
         this.modelManager.onStatusChange((message, type) => {
@@ -522,12 +530,9 @@ class LaserWeedController {
         let detectedWeeds = [];
         
         try {
-            if (this.currentDetectionMode === 'yolo' && this.yoloDetector) {
-                // Use YOLO detection
-                detectedWeeds = await this.yoloDetector.detect(video);
-            } else if (this.currentDetectionMode === 'onnx' && this.yoloDetector) {
-                // Use ONNX detection (yoloDetector is actually the current detector)
-                detectedWeeds = await this.yoloDetector.detect(video);
+            if ((this.currentDetectionMode === 'yolo' || this.currentDetectionMode === 'onnx') && this.currentDetector) {
+                // Use the appropriate detector (YOLO or ONNX)
+                detectedWeeds = await this.currentDetector.detect(video);
             } else {
                 // Use simple color detection
                 detectedWeeds = this.detectGreenAreasSimple(video);

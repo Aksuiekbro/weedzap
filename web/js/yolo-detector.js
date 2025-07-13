@@ -30,6 +30,11 @@ class YOLODetector {
             this.isLoading = true;
             console.log(`Loading YOLO model from: ${modelPath}`);
 
+            // Check if this is an ONNX model (should not be handled by YOLO detector)
+            if (modelPath.endsWith('.onnx')) {
+                throw new Error('ONNX models should be handled by ONNXDetector, not YOLODetector');
+            }
+
             // Load model configuration
             const configResponse = await fetch(configPath);
             if (!configResponse.ok) {
@@ -50,6 +55,11 @@ class YOLODetector {
             // Adjust settings for YOLOv7 models
             if (this.modelType.includes('yolov7')) {
                 this.adjustYOLOv7Settings();
+            }
+
+            // Check if this is an ONNX model (should not be handled by YOLO detector)
+            if (modelPath.endsWith('.onnx')) {
+                throw new Error('ONNX models should be handled by ONNXDetector, not YOLODetector');
             }
 
             // Check if this is a placeholder model first

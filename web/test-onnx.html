@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ONNX Model Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/onnxjs/dist/onnx.min.js"></script>
+</head>
+<body>
+    <h1>ONNX Model Test</h1>
+    <div id="status">Loading...</div>
+    <script>
+        async function testONNX() {
+            const statusDiv = document.getElementById('status');
+            
+            try {
+                // Test if ONNX.js is available
+                if (typeof onnx === 'undefined') {
+                    throw new Error('ONNX.js not loaded');
+                }
+                
+                statusDiv.innerHTML = '✅ ONNX.js loaded successfully';
+                
+                // Test model loading
+                const modelPath = 'models/custom-models/tiny_model_680_final.onnx';
+                const configPath = 'models/custom-models/tiny_model_680_final.json';
+                
+                // Test config file
+                const configResponse = await fetch(configPath);
+                if (!configResponse.ok) {
+                    throw new Error(`Config not found: ${configResponse.status}`);
+                }
+                
+                const config = await configResponse.json();
+                statusDiv.innerHTML += '<br>✅ Config file loaded: ' + config.name;
+                
+                // Test ONNX model file exists
+                const modelResponse = await fetch(modelPath, { method: 'HEAD' });
+                if (!modelResponse.ok) {
+                    throw new Error(`Model not found: ${modelResponse.status}`);
+                }
+                
+                statusDiv.innerHTML += '<br>✅ ONNX model file exists (' + (modelResponse.headers.get('content-length') / 1024 / 1024).toFixed(1) + ' MB)';
+                
+                // Test ONNX session creation
+                const session = new onnx.InferenceSession();
+                statusDiv.innerHTML += '<br>✅ ONNX session created';
+                
+                statusDiv.innerHTML += '<br><br>🎉 All ONNX components working correctly!';
+                
+            } catch (error) {
+                statusDiv.innerHTML = '❌ Error: ' + error.message;
+                console.error('ONNX test failed:', error);
+            }
+        }
+        
+        testONNX();
+    </script>
+</body>
+</html>

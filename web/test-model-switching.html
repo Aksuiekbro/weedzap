@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Model Switching Test - LaserWeed</title>
+    <!-- TensorFlow.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <!-- ONNX.js -->
+    <script src="https://cdn.jsdelivr.net/npm/onnxjs/dist/onnx.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #1a1a1a;
+            color: white;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #333;
+        }
+        .success { background: rgba(0, 255, 136, 0.2); border-color: #00ff88; }
+        .error { background: rgba(255, 68, 68, 0.2); border-color: #ff4444; }
+        .loading { background: rgba(255, 136, 0, 0.2); border-color: #ff8800; }
+        button {
+            background: #00ff88;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            color: black;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #00cc6a; }
+        button:disabled { background: #555; color: #999; cursor: not-allowed; }
+        pre { 
+            background: #2a2a2a; 
+            padding: 10px; 
+            border-radius: 5px; 
+            overflow-x: auto;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .model-info {
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .test-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 Model Switching Test</h1>
+        
+        <div id="status" class="status">
+            Ready to test model switching...
+        </div>
+        
+        <div class="test-grid">
+            <div>
+                <h3>Test Controls</h3>
+                <button onclick="testSimpleMode()" id="testSimple">Test Simple Mode</button>
+                <button onclick="testONNXMode()" id="testONNX">Test ONNX Mode</button>
+                <button onclick="testSwitching()" id="testSwitch">Test Model Switching</button>
+                <button onclick="clearLogs()">🗑️ Clear Logs</button>
+            </div>
+            
+            <div>
+                <h3>Current Model Info</h3>
+                <div id="model-info" class="model-info">
+                    No model loaded
+                </div>
+            </div>
+        </div>
+        
+        <h3>Test Results:</h3>
+        <pre id="console-output"></pre>
+    </div>
+
+    <!-- Load scripts with cache busting -->
+    <script>
+        const cacheBreaker = '?v=' + Date.now();
+        console.log('🔄 Cache breaker:', cacheBreaker);
+    </script>
+    <script>
+        // Load dependencies dynamically
+        const scripts = [
+            'js/yolo-detector.js',
+            'js/onnx-detector.js', 
+            'js/model-manager.js'
+        ];
+        
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src + cacheBreaker;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+        
+        async function loadAllScripts() {
+            for (const script of scripts) {
+                await loadScript(script);
+                console.log('✅ Loaded:', script);
+            }
+        }
+        
+        // Console capture
+        let originalConsoleLog = console.log;
+        let originalConsoleError = console.error;
+        
+        function logToPage(type, ...args) {
+            const output = document.getElementById('console-output');
+            const timestamp = new Date().toLocaleTimeString();
+            const message = args.map(arg => 
+                typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+            ).join(' ');
+            
+            output.textContent += `[${timestamp}] ${type.toUpperCase()}: ${message}\n`;
+            output.scrollTop = output.scrollHeight;
+            
+            if (type === 'log') originalConsoleLog(...args);
+            else if (type === 'error') originalConsoleError(...args);
+        }
+        
+        console.log = (...args) => logToPage('log', ...args);
+        console.error = (...args) => logToPage('error', ...args);
+        
+        function updateStatus(message, type = '') {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+        }
+        
+        function updateModelInfo(info) {
+            document.getElementById('model-info').textContent = 
+                typeof info === 'object' ? JSON.stringify(info, null, 2) : info;
+        }
+        
+        function clearLogs() {
+            document.getElementById('console-output').textContent = '';
+            updateStatus('Logs cleared.');
+        }
+        
+        // Global model manager
+        let modelManager = null;
+        
+        async function initializeModelManager() {
+            if (modelManager) return modelManager;
+            
+            console.log('🔧 Initializing ModelManager...');
+            modelManager = new ModelManager();
+            
+            // Set up callbacks
+            modelManager.onModelChange((mode, detector) => {
+                console.log(`📡 Model changed to: ${mode}`);
+                updateModelInfo(`Current: ${mode} detector`);
+            });
+            
+            modelManager.onStatusChange((message, type) => {
+                console.log(`📢 Status: ${message} (${type})`);
+            });
+            
+            // Create REAL DOM elements for testing (not mocks!)
+            const realModelSelector = document.createElement('select');
+            realModelSelector.innerHTML = `
+                <option value="simple">Simple Detection</option>
+                <option value="yolov5s-weed">YOLOv5s Weed</option>
+                <option value="custom">Custom Model</option>
+            `;
+            
+            const realModelFiles = document.createElement('input');
+            realModelFiles.type = 'file';
+            
+            const realModelUpload = document.createElement('div');
+            realModelUpload.style.display = 'none';
+            
+            const realModelStatusValue = document.createElement('span');
+            realModelStatusValue.textContent = 'Not Loaded';
+            
+            const mockElements = {
+                modelSelector: realModelSelector,
+                modelFiles: realModelFiles,
+                modelUpload: realModelUpload,
+                modelStatusValue: realModelStatusValue
+            };
+            
+            modelManager.initialize(mockElements);
+            console.log('✅ ModelManager initialized');
+            
+            return modelManager;
+        }
+        
+        async function testSimpleMode() {
+            updateStatus('🔄 Testing Simple Mode...', 'loading');
+            console.log('🚀 Testing Simple Mode');
+            
+            try {
+                const manager = await initializeModelManager();
+                await manager.switchModel('simple');
+                
+                console.log('✅ Simple mode activated');
+                updateStatus('✅ Simple mode working', 'success');
+                updateModelInfo('Simple Color Detection');
+                
+            } catch (error) {
+                console.error('❌ Simple mode test failed:', error);
+                updateStatus(`❌ Simple mode failed: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testONNXMode() {
+            updateStatus('🔄 Testing ONNX Mode...', 'loading');
+            console.log('🚀 Testing ONNX Mode');
+            
+            try {
+                const manager = await initializeModelManager();
+                
+                // Test with the recommended ONNX model
+                console.log('🎯 Testing tiny_model_680_final');
+                await manager.switchModel('tiny_model_680_final');
+                
+                const modelInfo = manager.onnxDetector.getModelInfo();
+                console.log('✅ ONNX mode activated:', modelInfo);
+                updateStatus('✅ ONNX mode working', 'success');
+                updateModelInfo(modelInfo);
+                
+            } catch (error) {
+                console.error('❌ ONNX mode test failed:', error);
+                updateStatus(`❌ ONNX mode failed: ${error.message}`, 'error');
+                updateModelInfo(`Error: ${error.message}`);
+            }
+        }
+        
+        async function testSwitching() {
+            updateStatus('🔄 Testing Model Switching...', 'loading');
+            console.log('🚀 Testing Model Switching Sequence');
+            
+            const buttons = document.querySelectorAll('button');
+            buttons.forEach(btn => btn.disabled = true);
+            
+            try {
+                const manager = await initializeModelManager();
+                
+                // Test sequence: Simple -> ONNX -> Simple
+                console.log('📋 Step 1: Switch to Simple');
+                await manager.switchModel('simple');
+                console.log('✅ Step 1 completed');
+                
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                console.log('📋 Step 2: Switch to ONNX');
+                await manager.switchModel('tiny_model_680_final');
+                console.log('✅ Step 2 completed');
+                
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                console.log('📋 Step 3: Switch back to Simple');
+                await manager.switchModel('simple');
+                console.log('✅ Step 3 completed');
+                
+                console.log('🎉 Model switching test completed successfully!');
+                updateStatus('✅ Model switching working perfectly!', 'success');
+                updateModelInfo('Switching test completed successfully');
+                
+            } catch (error) {
+                console.error('❌ Model switching test failed:', error);
+                updateStatus(`❌ Switching failed: ${error.message}`, 'error');
+                updateModelInfo(`Switching Error: ${error.message}`);
+            } finally {
+                buttons.forEach(btn => btn.disabled = false);
+            }
+        }
+        
+        // Initialize when page loads
+        window.addEventListener('load', async () => {
+            console.log('🌟 Model Switching Test Page Loaded');
+            
+            try {
+                await loadAllScripts();
+                console.log('🎉 All dependencies loaded successfully');
+                updateStatus('✅ Ready for testing', 'success');
+            } catch (error) {
+                console.error('💥 Failed to load dependencies:', error);
+                updateStatus('❌ Failed to load dependencies', 'error');
+            }
+        });
+    </script>
+</body>
+</html>

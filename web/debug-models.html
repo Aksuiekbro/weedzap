@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Model Debug - LaserWeed</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/onnxjs/dist/onnx.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; margin: 20px; background: #0a0a0a; color: white; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .log { background: #1a1a1a; padding: 15px; margin: 10px 0; border-radius: 8px; font-family: monospace; }
+        .success { color: #00ff88; }
+        .error { color: #ff4444; }
+        .info { color: #88aaff; }
+        .debug { color: #ffaa44; }
+        button { 
+            background: #00ff88; color: #000; border: none; padding: 10px 20px; 
+            border-radius: 6px; cursor: pointer; margin: 5px; font-weight: bold;
+        }
+        button:hover { background: #00cc6a; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 LaserWeed Model Debug</h1>
+        <p>This page helps diagnose model loading issues.</p>
+        
+        <button onclick="testONNXModel()">Test ONNX Model</button>
+        <button onclick="testModelManager()">Test Model Manager</button>
+        <button onclick="clearLog()">Clear Log</button>
+        
+        <div id="log" class="log"></div>
+    </div>
+
+    <script src="js/onnx-detector.js"></script>
+    <script src="js/yolo-detector.js"></script>
+    <script src="js/model-manager.js"></script>
+
+    <script>
+        const logDiv = document.getElementById('log');
+        
+        function addLog(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type;
+            logDiv.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+        
+        function clearLog() {
+            logDiv.innerHTML = '';
+        }
+        
+        async function testONNXModel() {
+            addLog('🧪 Testing ONNX Model Loading...', 'info');
+            
+            try {
+                // Test ONNX.js availability
+                if (typeof onnx === 'undefined') {
+                    throw new Error('ONNX.js library not loaded');
+                }
+                addLog('✅ ONNX.js library available', 'success');
+                
+                // Test model files
+                const modelPath = 'models/custom-models/tiny_model_680_final.onnx';
+                const configPath = 'models/custom-models/tiny_model_680_final.json';
+                
+                addLog(`🔍 Checking model files...`, 'info');
+                addLog(`Model: ${modelPath}`, 'debug');
+                addLog(`Config: ${configPath}`, 'debug');
+                
+                // Test config file
+                const configResponse = await fetch(configPath);
+                if (!configResponse.ok) {
+                    throw new Error(`Config file not found: ${configResponse.status}`);
+                }
+                const config = await configResponse.json();
+                addLog(`✅ Config loaded: ${config.name} (${config.classes.length} classes)`, 'success');
+                
+                // Test ONNX model file
+                const modelResponse = await fetch(modelPath, { method: 'HEAD' });
+                if (!modelResponse.ok) {
+                    throw new Error(`ONNX model not found: ${modelResponse.status}`);
+                }
+                const sizeInMB = (modelResponse.headers.get('content-length') / 1024 / 1024).toFixed(1);
+                addLog(`✅ ONNX model exists (${sizeInMB} MB)`, 'success');
+                
+                // Test ONNX detector
+                const detector = new ONNXDetector();
+                addLog(`🔄 Creating ONNX detector and loading model...`, 'info');
+                
+                const result = await detector.loadModel(modelPath, configPath);
+                if (result) {
+                    addLog(`🎉 ONNX model loaded successfully!`, 'success');
+                    const modelInfo = detector.getModelInfo();
+                    addLog(`Model info: ${modelInfo.classes.length} classes, input: ${modelInfo.inputSize.join('x')}`, 'info');
+                } else {
+                    addLog(`❌ ONNX model failed to load`, 'error');
+                }
+                
+            } catch (error) {
+                addLog(`❌ ONNX test failed: ${error.message}`, 'error');
+                console.error('Full error:', error);
+            }
+        }
+        
+        async function testModelManager() {
+            addLog('🧪 Testing Model Manager...', 'info');
+            
+            try {
+                const manager = new ModelManager();
+                addLog('✅ Model manager created', 'success');
+                
+                // Test available models
+                const models = manager.getAvailableModels();
+                addLog(`📋 Available models: ${models.length}`, 'info');
+                
+                models.forEach(model => {
+                    addLog(`  - ${model.name} (${model.type})`, 'debug');
+                });
+                
+                // Test ONNX model switching
+                addLog('🔄 Testing ONNX model switch...', 'info');
+                
+                // Set up dummy elements
+                const dummyElements = {
+                    modelSelector: document.createElement('select'),
+                    modelUpload: document.createElement('div'),
+                    modelFiles: document.createElement('input'),
+                    modelStatusValue: document.createElement('span')
+                };
+                
+                manager.initialize(dummyElements);
+                
+                // Try to switch to ONNX model
+                manager.onModelChange((detectionMode, detector) => {
+                    addLog(`🎯 Model switch callback: ${detectionMode}`, 'success');
+                });
+                
+                await manager.switchModel('tiny_model_680_final');
+                addLog(`✅ Model manager test completed`, 'success');
+                
+            } catch (error) {
+                addLog(`❌ Model manager test failed: ${error.message}`, 'error');
+                console.error('Full error:', error);
+            }
+        }
+        
+        // Auto-run basic tests on load
+        window.addEventListener('load', () => {
+            addLog('🚀 Debug page loaded', 'info');
+            addLog('Libraries available:', 'info');
+            addLog(`  - TensorFlow.js: ${typeof tf !== 'undefined' ? '✅' : '❌'}`, 'debug');
+            addLog(`  - ONNX.js: ${typeof onnx !== 'undefined' ? '✅' : '❌'}`, 'debug');
+            addLog(`  - ONNXDetector: ${typeof ONNXDetector !== 'undefined' ? '✅' : '❌'}`, 'debug');
+            addLog(`  - YOLODetector: ${typeof YOLODetector !== 'undefined' ? '✅' : '❌'}`, 'debug');
+            addLog(`  - ModelManager: ${typeof ModelManager !== 'undefined' ? '✅' : '❌'}`, 'debug');
+        });
+    </script>
+</body>
+</html>

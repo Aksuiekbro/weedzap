@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ONNX Model Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/onnxjs-web@1.0.0-alpha.18/dist/onnx-web.min.js"></script>
+    <script>
+        // Fallback
+        if (typeof onnx === 'undefined') {
+            document.write('<script src="https://cdn.jsdelivr.net/npm/onnxjs/dist/onnx.min.js"><\/script>');
+        }
+    </script>
+</head>
+<body>
+    <h1>ONNX Model Loading Test</h1>
+    <div id="status">Testing...</div>
+    <div id="log" style="background: #f0f0f0; padding: 10px; margin: 10px 0; height: 300px; overflow-y: auto; font-family: monospace;"></div>
+    
+    <script>
+        const log = document.getElementById('log');
+        const status = document.getElementById('status');
+        
+        function addLog(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const color = type === 'error' ? 'red' : type === 'success' ? 'green' : 'black';
+            log.innerHTML += `<div style="color: ${color}">[${timestamp}] ${message}</div>`;
+            log.scrollTop = log.scrollHeight;
+            console.log(message);
+        }
+        
+        async function testONNX() {
+            try {
+                addLog('🔍 Testing ONNX.js availability...');
+                
+                if (typeof onnx === 'undefined') {
+                    throw new Error('ONNX.js library not loaded');
+                }
+                
+                addLog('✅ ONNX.js library loaded successfully', 'success');
+                addLog(`ONNX.js version: ${onnx.version || 'Unknown'}`);
+                
+                // Test session creation
+                addLog('🔄 Creating ONNX inference session...');
+                const session = new onnx.InferenceSession();
+                addLog('✅ ONNX session created successfully', 'success');
+                
+                // Test model loading
+                addLog('🔄 Attempting to load ONNX model...');
+                const modelPath = 'models/custom-models/tiny_model_680_final.onnx';
+                addLog(`Model path: ${modelPath}`);
+                
+                await session.loadModel(modelPath);
+                addLog('✅ ONNX model loaded successfully!', 'success');
+                
+                status.textContent = '✅ All tests passed!';
+                status.style.color = 'green';
+                
+            } catch (error) {
+                addLog(`❌ Error: ${error.message}`, 'error');
+                addLog(`Stack trace: ${error.stack}`, 'error');
+                status.textContent = '❌ Test failed - see logs';
+                status.style.color = 'red';
+                
+                // Additional debugging
+                addLog('🔍 Debug info:', 'info');
+                addLog(`- User Agent: ${navigator.userAgent}`);
+                addLog(`- Current URL: ${window.location.href}`);
+                addLog(`- ONNX object: ${typeof onnx}`);
+                if (typeof onnx !== 'undefined') {
+                    addLog(`- ONNX properties: ${Object.keys(onnx).join(', ')}`);
+                }
+            }
+        }
+        
+        // Run test when page loads
+        window.addEventListener('load', () => {
+            setTimeout(testONNX, 1000); // Give libraries time to load
+        });
+    </script>
+</body>
+</html>

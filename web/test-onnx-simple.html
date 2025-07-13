@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple ONNX Test - LaserWeed</title>
+    <!-- ONNX.js -->
+    <script src="https://cdn.jsdelivr.net/npm/onnxjs/dist/onnx.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #1a1a1a;
+            color: white;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #333;
+        }
+        .success { background: rgba(0, 255, 136, 0.2); border-color: #00ff88; }
+        .error { background: rgba(255, 68, 68, 0.2); border-color: #ff4444; }
+        .loading { background: rgba(255, 136, 0, 0.2); border-color: #ff8800; }
+        button {
+            background: #00ff88;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            color: black;
+            cursor: pointer;
+            margin: 5px;
+        }
+        pre { 
+            background: #2a2a2a; 
+            padding: 10px; 
+            border-radius: 5px; 
+            overflow-x: auto;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Simple ONNX Test</h1>
+    
+    <div id="status" class="status">
+        Ready to test...
+    </div>
+    
+    <button onclick="testBasicONNX()">🚀 Test Basic ONNX</button>
+    <button onclick="clearLogs()">🗑️ Clear Logs</button>
+    
+    <h3>Console Output:</h3>
+    <pre id="console-output"></pre>
+
+    <script>
+        // Console capture
+        let originalConsoleLog = console.log;
+        let originalConsoleError = console.error;
+        
+        function logToPage(type, ...args) {
+            const output = document.getElementById('console-output');
+            const timestamp = new Date().toLocaleTimeString();
+            const message = args.map(arg => 
+                typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+            ).join(' ');
+            
+            output.textContent += `[${timestamp}] ${type.toUpperCase()}: ${message}\n`;
+            output.scrollTop = output.scrollHeight;
+            
+            if (type === 'log') originalConsoleLog(...args);
+            else if (type === 'error') originalConsoleError(...args);
+        }
+        
+        console.log = (...args) => logToPage('log', ...args);
+        console.error = (...args) => logToPage('error', ...args);
+        
+        function updateStatus(message, type = '') {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+        }
+        
+        function clearLogs() {
+            document.getElementById('console-output').textContent = '';
+            updateStatus('Logs cleared.');
+        }
+        
+        async function testBasicONNX() {
+            updateStatus('🔄 Testing basic ONNX functionality...', 'loading');
+            console.log('🚀 Starting basic ONNX test...');
+            
+            try {
+                // Test 1: Check if ONNX.js is loaded
+                console.log('🔍 Checking ONNX.js availability...');
+                if (typeof onnx === 'undefined') {
+                    throw new Error('ONNX.js not loaded');
+                }
+                console.log('✅ ONNX.js is available');
+                console.log('📊 ONNX version:', onnx.version || 'unknown');
+                
+                // Test 2: Create a simple session
+                console.log('🔍 Creating ONNX inference session...');
+                const session = new onnx.InferenceSession();
+                console.log('✅ ONNX session created successfully');
+                
+                // Test 3: Check if model file exists
+                console.log('🔍 Checking model file availability...');
+                const modelPath = 'models/custom-models/tiny_model_680_final.onnx';
+                const modelResponse = await fetch(modelPath, { method: 'HEAD' });
+                
+                if (modelResponse.ok) {
+                    console.log('✅ Model file exists');
+                    console.log('📊 Model size:', modelResponse.headers.get('Content-Length'), 'bytes');
+                    
+                    // Test 4: Try to load the model
+                    console.log('🔍 Attempting to load model...');
+                    try {
+                        await session.loadModel(modelPath);
+                        console.log('✅ Model loaded successfully!');
+                        updateStatus('✅ Basic ONNX test passed!', 'success');
+                    } catch (loadError) {
+                        console.error('❌ Model loading failed:', loadError);
+                        updateStatus('⚠️ ONNX works but model loading failed', 'error');
+                    }
+                } else {
+                    console.error('❌ Model file not found:', modelResponse.status);
+                    updateStatus('⚠️ ONNX works but model file missing', 'error');
+                }
+                
+            } catch (error) {
+                console.error('❌ Basic ONNX test failed:', error);
+                updateStatus(`❌ Test failed: ${error.message}`, 'error');
+            }
+        }
+        
+        window.addEventListener('load', () => {
+            console.log('🌟 Simple ONNX Test Page Loaded');
+        });
+    </script>
+</body>
+</html>

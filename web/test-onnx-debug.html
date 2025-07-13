@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ONNX Test - LaserWeed</title>
+    <!-- ONNX.js -->
+    <script src="https://cdn.jsdelivr.net/npm/onnxjs/dist/onnx.min.js"></script>
+    <!-- Cache busting for local files -->
+    <script>
+        // Add cache busting timestamp to prevent stale code
+        const cacheBreaker = '?v=' + Date.now();
+        console.log('🔄 Cache breaker applied:', cacheBreaker);
+    </script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #1a1a1a;
+            color: white;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #333;
+        }
+        .success { background: rgba(0, 255, 136, 0.2); border-color: #00ff88; }
+        .error { background: rgba(255, 68, 68, 0.2); border-color: #ff4444; }
+        .loading { background: rgba(255, 136, 0, 0.2); border-color: #ff8800; }
+        button {
+            background: #00ff88;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            color: black;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #00cc6a; }
+        pre { 
+            background: #2a2a2a; 
+            padding: 10px; 
+            border-radius: 5px; 
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 ONNX Model Loading Test</h1>
+        
+        <div id="status" class="status">
+            Ready to test ONNX model loading...
+        </div>
+        
+        <button onclick="testONNXLoading()">🚀 Test ONNX Model Loading</button>
+        <button onclick="clearLogs()">🗑️ Clear Logs</button>
+        
+        <h3>Console Output:</h3>
+        <pre id="console-output"></pre>
+        
+        <h3>Model Information:</h3>
+        <pre id="model-info">No model loaded yet.</pre>
+    </div>
+
+    <script>
+        let originalConsoleLog = console.log;
+        let originalConsoleError = console.error;
+        let originalConsoleWarn = console.warn;
+        
+        // Capture console output
+        function logToPage(type, ...args) {
+            const output = document.getElementById('console-output');
+            const timestamp = new Date().toLocaleTimeString();
+            const message = args.map(arg => 
+                typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+            ).join(' ');
+            
+            output.textContent += `[${timestamp}] ${type.toUpperCase()}: ${message}\n`;
+            output.scrollTop = output.scrollHeight;
+            
+            // Call original console method
+            if (type === 'log') originalConsoleLog(...args);
+            else if (type === 'error') originalConsoleError(...args);
+            else if (type === 'warn') originalConsoleWarn(...args);
+        }
+        
+        console.log = (...args) => logToPage('log', ...args);
+        console.error = (...args) => logToPage('error', ...args);
+        console.warn = (...args) => logToPage('warn', ...args);
+        
+        function updateStatus(message, type = '') {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+        }
+        
+        function clearLogs() {
+            document.getElementById('console-output').textContent = '';
+            document.getElementById('model-info').textContent = 'No model loaded yet.';
+            updateStatus('Logs cleared.');
+        }
+        
+        // Simple ONNX Detector (minimal version for testing)
+        class TestONNXDetector {
+            constructor() {
+                this.session = null;
+                this.modelConfig = null;
+                this.isLoaded = false;
+                this.isLoading = false;
+            }
+            
+            async loadModel(modelPath, configPath) {
+                if (this.isLoading) {
+                    console.log('Model is already loading...');
+                    return false;
+                }
+
+                this.isLoading = true;
+                console.log(`🔍 Loading ONNX model from: ${modelPath}`);
+                console.log(`🔍 Loading config from: ${configPath}`);
+
+                try {
+                    // Step 1: Load model configuration
+                    console.log('📋 Step 1: Loading configuration file...');
+                    const configResponse = await fetch(configPath);
+                    if (!configResponse.ok) {
+                        throw new Error(`Failed to load config: ${configResponse.status} - ${configResponse.statusText}`);
+                    }
+                    this.modelConfig = await configResponse.json();
+                    console.log('✅ Configuration loaded:', this.modelConfig);
+
+                    // Step 2: Check if ONNX file exists
+                    console.log('📋 Step 2: Checking ONNX model file...');
+                    const modelResponse = await fetch(modelPath, { method: 'HEAD' });
+                    if (!modelResponse.ok) {
+                        throw new Error(`ONNX model file not found: ${modelResponse.status} - ${modelResponse.statusText}`);
+                    }
+                    console.log('✅ ONNX model file exists, size:', modelResponse.headers.get('Content-Length'), 'bytes');
+
+                    // Step 3: Initialize ONNX session
+                    console.log('📋 Step 3: Initializing ONNX.js session...');
+                    this.session = new onnx.InferenceSession();
+                    console.log('✅ ONNX session created');
+
+                    // Step 4: Load the ONNX model
+                    console.log('📋 Step 4: Loading ONNX model into session...');
+                    await this.session.loadModel(modelPath);
+                    console.log('✅ ONNX model loaded successfully!');
+
+                    this.isLoaded = true;
+                    this.isLoading = false;
+                    
+                    const modelInfo = {
+                        name: this.modelConfig.name,
+                        type: this.modelConfig.type,
+                        classes: this.modelConfig.classes,
+                        inputSize: this.modelConfig.input_size,
+                        performance: this.modelConfig.performance
+                    };
+                    
+                    document.getElementById('model-info').textContent = JSON.stringify(modelInfo, null, 2);
+                    
+                    return true;
+                    
+                } catch (error) {
+                    this.isLoading = false;
+                    this.isLoaded = false;
+                    console.error('❌ Failed to load ONNX model:', error);
+                    throw error;
+                }
+            }
+        }
+        
+        async function testONNXLoading() {
+            updateStatus('🔄 Testing ONNX model loading...', 'loading');
+            console.log('🚀 Starting ONNX model loading test...');
+            
+            // Check if ONNXDetector is available
+            if (typeof ONNXDetector === 'undefined') {
+                updateStatus('❌ ONNXDetector not loaded', 'error');
+                console.error('❌ ONNXDetector class not available');
+                return;
+            }
+            
+            const detector = new ONNXDetector();
+            
+            try {
+                // Test the recommended model
+                const modelPath = 'models/custom-models/tiny_model_680_final.onnx';
+                const configPath = 'models/custom-models/tiny_model_680_final.json';
+                
+                console.log('🎯 Testing recommended model:', modelPath);
+                console.log('🔧 Using real ONNXDetector class with enhanced debugging');
+                
+                const success = await detector.loadModel(modelPath, configPath);
+                
+                if (success) {
+                    updateStatus('✅ ONNX model loaded successfully!', 'success');
+                    console.log('🎉 Model loading test completed successfully!');
+                    
+                    // Display model information
+                    const modelInfo = detector.getModelInfo();
+                    document.getElementById('model-info').textContent = JSON.stringify(modelInfo, null, 2);
+                    
+                    // Now test a simple inference if we have video/canvas available
+                    console.log('🧪 Attempting simple inference test...');
+                    await testInference(detector);
+                    
+                } else {
+                    updateStatus('⚠️ Model loading returned false', 'error');
+                }
+                
+            } catch (error) {
+                updateStatus(`❌ Error: ${error.message}`, 'error');
+                console.error('💥 Test failed:', error);
+                console.error('💥 Error details:', error.stack);
+            }
+        }
+        
+        async function testInference(detector) {
+            try {
+                // Create a simple test canvas
+                const canvas = document.createElement('canvas');
+                canvas.width = 640;
+                canvas.height = 640;
+                const ctx = canvas.getContext('2d');
+                
+                // Fill with a simple pattern
+                ctx.fillStyle = '#00ff00'; // Green (simulating vegetation)
+                ctx.fillRect(100, 100, 200, 200);
+                ctx.fillStyle = '#8B4513'; // Brown (simulating weeds)
+                ctx.fillRect(300, 300, 150, 150);
+                
+                console.log('🖼️ Created test image for inference');
+                
+                // Run detection
+                const detections = await detector.detect(canvas);
+                console.log('🎯 Inference test completed');
+                console.log('🎯 Detections found:', detections.length);
+                console.log('🎯 Detection details:', detections);
+                
+                if (detections.length > 0) {
+                    console.log('✅ Inference test successful!');
+                    updateStatus('✅ Model loaded and inference working!', 'success');
+                } else {
+                    console.log('⚠️ No detections found (may be normal for test image)');
+                    updateStatus('✅ Model loaded, inference completed (no detections)', 'success');
+                }
+                
+            } catch (inferenceError) {
+                console.error('❌ Inference test failed:', inferenceError);
+                console.error('❌ Inference error stack:', inferenceError.stack);
+                updateStatus('⚠️ Model loaded but inference failed', 'error');
+            }
+        }
+        
+        // Dynamically load ONNX detector with cache busting
+        function loadONNXDetector() {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = `js/onnx-detector.js${cacheBreaker}`;
+                script.onload = () => {
+                    console.log('✅ ONNX Detector loaded with cache breaker');
+                    resolve();
+                };
+                script.onerror = (error) => {
+                    console.error('❌ Failed to load ONNX Detector:', error);
+                    reject(error);
+                };
+                document.head.appendChild(script);
+            });
+        }
+
+        // Auto-run test when page loads
+        window.addEventListener('load', async () => {
+            console.log('🌟 ONNX Test Page Loaded');
+            console.log('📁 Current URL:', window.location.href);
+            console.log('🔗 Expected model path: models/custom-models/tiny_model_680_final.onnx');
+            console.log('🔄 Using cache breaker:', cacheBreaker);
+            
+            try {
+                // Load ONNX detector with cache busting
+                await loadONNXDetector();
+                console.log('🎉 All dependencies loaded, ready for testing');
+            } catch (error) {
+                console.error('💥 Failed to load dependencies:', error);
+            }
+        });
+    </script>
+</body>
+</html>
